@@ -1,280 +1,37 @@
-# Hugo and the General Data Protection Regulation (GDPR)(雨果和通用數據保護條例)
-About how to configure your Hugo site to meet the new regulations(關於如何配置您的Hugo網站以符合新規定).
+# Hugo's Security Model(雨果的安全模式)
+A summary of Hugo’s security model(Hugo的安全模型摘要).
 
-General Data Protection Regulation ([GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation)) is a regulation in EU law on data protection and privacy for all individuals within the European Union and the European Economic Area. It became enforceable on 25 May 2018(通用數據保護法規（[GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation)）是歐盟法律中針對歐盟和歐洲經濟區內所有個人的數據保護和隱私的法規。它於2018年5月25日生效).
+## Runtime Security (運行時安全)
 
-**Hugo is a static site generator. By using Hugo you are already standing on very solid ground. Static HTML files on disk are much easier to reason about compared to server and database driven web sites**.(**雨果是一個靜態網站生成器。通過使用Hugo，您已經站在了堅實的基礎上。與服務器和數據庫驅動的網站相比，磁盤上的靜態HTML文件更容易推斷**)
+Hugo produces static output, so once built, the runtime is the browser (assuming the output is HTML) and any server (API) that you integrate with(Hugo會生成靜態輸出，因此一旦構建，運行時就是瀏覽器（假設輸出為HTML）以及與之集成的任何服務器(API).
 
-But even static websites can integrate with external services, so from version `0.41`, Hugo provides a **Privacy Config** that covers the relevant built-in templates(但是，即使靜態網站也可以與外部服務集成，因此`0.41`Hugo 從版本開始，提供了一個涵蓋相關內置模板的**Privacy Config**。).
+But when developing and building your site, the runtime is the `hugo` executable. Securing a runtime can be [a real challenge](https://blog.logrocket.com/how-to-protect-your-node-js-applications-from-malicious-dependencies-5f2e60ea08f9/).(但是，在開發和構建站點時，運行時是`hugo`可執行文件。確保運行時安全是[一個真正的挑戰](https://blog.logrocket.com/how-to-protect-your-node-js-applications-from-malicious-dependencies-5f2e60ea08f9/)).
 
-Note that(注意):
+**Hugo’s main approach is that of sandboxing(雨果的主要方法是沙盒):**
 
-- These settings have their defaults setting set to *off*, i.e. how it worked before Hugo `0.41`. You must do your own evaluation of your site and apply the appropriate settings(這些設置的默認設置為*off*，即Hugo之前的工作方式`0.41`。您必須對自己的網站進行評估並應用適當的設置).
-- These settings work with the [internal templates](https://gohugo.io/templates/internal/). Some theme may contain custom templates for embedding services like Google Analytics. In that case these options have no effect(這些設置與[內部模板一起使用](https://gohugo.io/templates/internal/)。某些主題可能包含用於嵌入服務（例如Google Analytics（分析））的自定義模板。在這種情況下，這些選項無效).
-- We will continue this work and improve this further in future Hugo versions(我們將繼續這項工作，並在將來的Hugo版本中進一步改進).
+- Hugo has a virtual file system and only the main project (not third-party components) is allowed to mount directories or files outside the project root(Hugo有一個虛擬文件系統，並且只允許主項目（而非第三方組件）在項目根目錄之外掛載目錄或文件).
+- Only the main project can walk symbolic links(只有主項目可以走符號鏈接).
+- User-defined components have only read-access to the filesystem(用戶定義的組件僅具有對文件系統的讀取權限).
+- We shell out to some external binaries to support [Asciidoctor](https://gohugo.io/content-management/formats/#list-of-content-formats) and similar, but those binaries and their flags are predefined. General functions to run arbitrary external OS commands have been [discussed](https://github.com/gohugoio/hugo/issues/796), but not implemented because of security concerns(我們使用一些外部二進製文件來支持Asciidoctor和類似文件，但是這些二進製文件及其標誌是預定義的。已經討論了運行任意外部OS命令的一般功能，但是由於安全方面的考慮未實現).
 
-## All Privacy Settings (所有隱私設置)
+Hugo will soon introduce a concept of *Content Source Plugins* (AKA *Pages from Data*), but the above will still hold true(Hugo很快會引入內容源插件（Data的 AKA Pages）概念，但是以上內容仍然適用).
 
-Below are all privacy settings and their default value. These settings need to be put in your site config (e.g. `config.toml`)(以下是所有隱私設置及其默認值。這些設置需要放在您的網站配置中（例如`config.toml`）).
+## Dependency Security (依賴安全)
 
-config. yaml
+Hugo builds as a static binary using [Go Modules](https://github.com/golang/go/wiki/Modules) to manage its dependencies. Go Modules have several safeguards, one of them being the `go.sum` file. This is a database of the expected cryptographic checksums of all of your dependencies, including any transitive(Hugo使用[Go Modules](https://github.com/golang/go/wiki/Modules)構建為靜態二進製文件來管理其依賴項。Go Module具有多種保護措施，其中之一就是go.sum文件保護。這是所有依賴項（包括所有傳遞項）的預期密碼校驗和的數據庫).
 
-```yaml
-privacy:
-  disqus:
-    disable: false
-  googleAnalytics:
-    anonymizeIP: false
-    disable: false
-    respectDoNotTrack: false
-    useSessionStorage: false
-  instagram:
-    disable: false
-    simple: false
-  twitter:
-    disable: false
-    enableDNT: false
-    simple: false
-  vimeo:
-    disable: false
-    simple: false
-  youtube:
-    disable: false
-    privacyEnhanced: false
-```
+[Hugo Modules](https://gohugo.io/hugo-modules/) is built on top of Go Modules functionality, and a Hugo project using Hugo Modules will have a `go.sum` file. We recommend that you commit this file to your version control system. The Hugo build will fail if there is a checksum mismatch, which would be an indication of [dependency tampering](https://julienrenaux.fr/2019/12/20/github-actions-security-risk/). ([Hugo Modules](https://gohugo.io/hugo-modules/)建立在Go Modules功能的基礎上，使用Hugo Modules的Hugo項目將有一個go.sum文件。我們建議您將此文件提交到版本控制系統。如果校驗和不匹配，Hugo構建將失敗，這可能表示[依賴項被篡改](https://julienrenaux.fr/2019/12/20/github-actions-security-risk/)).
 
-config. toml
+## Web Application Security (Web應用安全)
 
-```toml
-[privacy]
-  [privacy.disqus]
-    disable = false
-  [privacy.googleAnalytics]
-    anonymizeIP = false
-    disable = false
-    respectDoNotTrack = false
-    useSessionStorage = false
-  [privacy.instagram]
-    disable = false
-    simple = false
-  [privacy.twitter]
-    disable = false
-    enableDNT = false
-    simple = false
-  [privacy.vimeo]
-    disable = false
-    simple = false
-  [privacy.youtube]
-    disable = false
-    privacyEnhanced = false
-```
+These are the security threats as defined by [OWASP](https://en.wikipedia.org/wiki/OWASP). (這些是[OWASP](https://en.wikipedia.org/wiki/OWASP)定義的安全威脅)
 
-config. json
+For HTML output, this is the core security model(對於HTML輸出，這是核心安全模型):
 
-```json
-{
-   "privacy": {
-      "disqus": {
-         "disable": false
-      },
-      "googleAnalytics": {
-         "anonymizeIP": false,
-         "disable": false,
-         "respectDoNotTrack": false,
-         "useSessionStorage": false
-      },
-      "instagram": {
-         "disable": false,
-         "simple": false
-      },
-      "twitter": {
-         "disable": false,
-         "enableDNT": false,
-         "simple": false
-      },
-      "vimeo": {
-         "disable": false,
-         "simple": false
-      },
-      "youtube": {
-         "disable": false,
-         "privacyEnhanced": false
-      }
-   }
-}
-```
+https://golang.org/pkg/html/template/#hdr-Security_Model
 
-## Disable All Services(禁用所有服務)
+In short(簡而言之):
 
-An example Privacy Config that disables all the relevant services in Hugo. With this configuration, the other settings will not matter(隱私配置示例，它禁用了Hugo中的所有相關服務。使用此配置，其他設置將無關緊要).
+Templates authors (you) are trusted, but the data you send in is not. This is why you sometimes need to use the *safe* functions, such as `safeHTML`, to avoid escaping of data you know is safe. There is one exception to the above, as noted in the documentation: If you enable inline shortcodes, you also say that the shortcodes and data handling in content files are trusted, as those macros are treated as pure text. It may be worth adding that Hugo is a static site generator with no concept of dynamic user input(模板作者（您）是受信任的，但您發送的數據不受信任。這就是為什麼有時需要使用*安全*功能（例如`safeHTML`）來避免轉義已知安全數據的原因。如文檔中所述，上述內容有一個例外：如果啟用內聯短代碼，您還說內容文件中的短代碼和數據處理是受信任的，因為這些宏被視為純文本。可能值得補充的是，Hugo是靜態站點生成器，沒有動態用戶輸入的概念).
 
-config. yaml
-
-```yaml
-privacy:
-  disqus:
-    disable: true
-  googleAnalytics:
-    disable: true
-  instagram:
-    disable: true
-  twitter:
-    disable: true
-  vimeo:
-    disable: true
-  youtube:
-    disable: true
-```
-
-config. toml
-
-```toml
-[privacy]
-  [privacy.disqus]
-    disable = true
-  [privacy.googleAnalytics]
-    disable = true
-  [privacy.instagram]
-    disable = true
-  [privacy.twitter]
-    disable = true
-  [privacy.vimeo]
-    disable = true
-  [privacy.youtube]
-    disable = true
-```
-
-config. json
-
-```json
-{
-   "privacy": {
-      "disqus": {
-         "disable": true
-      },
-      "googleAnalytics": {
-         "disable": true
-      },
-      "instagram": {
-         "disable": true
-      },
-      "twitter": {
-         "disable": true
-      },
-      "vimeo": {
-         "disable": true
-      },
-      "youtube": {
-         "disable": true
-      }
-   }
-}
-```
-
-## The Privacy Settings Explained(隱私設置介紹)
-
-### GoogleAnalytics(谷歌分析)
-
-- anonymizeIP(**匿名IP**)
-
-  Enabling this will make it so the users’ IP addresses are anonymized within Google Analytics(啟用它可以使用戶的IP地址在Google Analytics（分析）中匿名化).
-
-- respectDoNotTrack(**尊重不要追踪**)
-
-  Enabling this will make the GA templates respect the “Do Not Track” HTTP header(啟用此功能將使GA模板遵守"請勿跟踪"HTTP標頭).
-
-- useSessionStorage(**使用會話存儲**)
-
-  Enabling this will disable the use of Cookies and use Session Storage to Store the GA Client ID(啟用此功能將禁用Cookies的使用，並使用會話存儲來存儲GA客戶ID).
-
-### Instagram 
-
-- simple(**簡單**)
-
-  If simple mode is enabled, a static and no-JS version of the Instagram image card will be built. Note that this only supports image cards and the image itself will be fetched from Instagram’s servers(如果啟用了簡單模式，則將構建靜態且非JS版本的Instagram圖像卡。請注意，這僅支持圖像卡，圖像本身將從Instagram的服務器中獲取).
-
-**Note:** If you use the *simple mode* for Instagram and a site styled with Bootstrap 4, you may want to disable the inline styles provided by Hugo(**注意：**如果您對Instagram 使用*簡單模式*以及使用Bootstrap 4樣式的網站，則可能要禁用Hugo提供的內聯樣式):
-
-config. yaml
-
-```yaml
-services:
-  instagram:
-    disableInlineCSS: true
-```
-
-config. toml
-
-```toml
-[services]
-  [services.instagram]
-    disableInlineCSS = true
-```
-
-config. json
-
-```json
-{
-   "services": {
-      "instagram": {
-         "disableInlineCSS": true
-      }
-   }
-}
-```
-
-
-
-### Twitter(推特)
-
-- enableDNT(啟用DNT)
-
-  Enabling this for the twitter/tweet shortcode, the tweet and its embedded page on your site are not used for purposes that include personalized suggestions and personalized ads(為twitter / tweet短代碼啟用此功能時，您的網站上的tweet及其嵌入頁面不會用於包括個性化建議和個性化廣告的目的).
-
-- simple(**簡單**)
-
-  If simple mode is enabled, a static and no-JS version of a tweet will be built(如果啟用了簡單模式，則將構建靜態且非JS版本的tweet).
-
-**Note:** If you use the *simple mode* for Twitter, you may want to disable the inlines styles provided by Hugo(**注意：**如果對Twitter 使用*簡單模式*，則可能要禁用Hugo提供的內聯樣式):
-
-config. yaml
-
-```yaml
-services:
-  twitter:
-    disableInlineCSS: true
-```
-
-config. toml
-
-```toml
-[services]
-  [services.twitter]
-    disableInlineCSS = true
-```
-
-config. json
-
-```json
-{
-   "services": {
-      "twitter": {
-         "disableInlineCSS": true
-      }
-   }
-}
-```
-
-
-
-### YouTube
-
-- privacyEnhanced(**隱私增強**)
-
-  When you turn on privacy-enhanced mode, YouTube won’t store information about visitors on your website unless the user plays the embedded video(啟用隱私增強模式後，除非用戶播放嵌入式視頻，否則YouTube不會在您的網站上存儲有關訪問者的信息).
-
-### Vimeo 
-
-- simple(**簡單**)
-
-  If simple mode is enabled, the video thumbnail is fetched from Vimeo’s servers and it is overlayed with a play button. If the user clicks to play the video, it will open in a new tab directly on Vimeo’s website(如果啟用了簡單模式，則將從Vimeo的服務器中提取視頻縮略圖，並在其上覆蓋一個播放按鈕。如果用戶單擊播放視頻，它將直接在Vimeo網站上的新標籤中打開).
+For content, the default Markdown renderer is [configured](https://gohugo.io/getting-started/configuration-markup) to remove or escape potentially unsafe content. This behavior can be reconfigured if you trust your content(對於內容，默認的Markdown渲染器[配置](https://gohugo.io/getting-started/configuration-markup)為刪除或轉義潛在的不安全內容。如果您信任自己的內容，則可以重新配置此行為).
